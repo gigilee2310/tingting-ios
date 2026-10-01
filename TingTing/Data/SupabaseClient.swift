@@ -139,7 +139,8 @@ actor SupabaseClient {
         var c = URLComponents(url: baseURL.appendingPathComponent("rest/v1/\(table)"), resolvingAgainstBaseURL: false)
         if !query.isEmpty { c?.queryItems = query }
         // PostgREST filter values may contain "," etc.; "+" must be escaped explicitly.
-        c?.percentEncodedQuery = c?.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        let encoded = c?.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        c?.percentEncodedQuery = encoded
         return c?.url
     }
 
