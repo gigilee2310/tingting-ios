@@ -92,7 +92,7 @@ struct HoldingListView: View {
                 Text(Fmt.vnd(holdings.reduce(0) { $0 + $1.value })).font(.money(14))
             }
             Section {
-                Text("Định giá tham khảo, không phải khuyến nghị đầu tư. Giá tự cập nhật khi mở app (chứng khoán: SSI · quỹ: Fmarket · vàng: PNJ giá mua vào · coin: Binance). Kéo xuống để lấy giá mới; sửa tay nếu mã không có giá.")
+                Text("Định giá tham khảo, không phải khuyến nghị đầu tư. Giá tự cập nhật mỗi lần mở app (chứng khoán: SSI · quỹ: Fmarket · vàng: PNJ giá mua vào · coin: Binance). Kéo xuống để lấy giá mới; sửa tay nếu mã không có giá.")
                     .font(.footnote).foregroundStyle(Theme.muted)
             }
         }

@@ -24,12 +24,12 @@ final class AppStore {
         get { UserDefaults.standard.object(forKey: "faceIDEnabled") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "faceIDEnabled") }
     }
-    private var lastPriceRefresh: Date {
-        get { UserDefaults.standard.object(forKey: "lastPriceRefresh") as? Date ?? .distantPast }
-        set { UserDefaults.standard.set(newValue, forKey: "lastPriceRefresh") }
-    }
     var isRefreshingPrices = false
     var lastPriceNotes: [String] = []
+    /// "Biến động giá" sheet shown after each refresh when something moved.
+    var priceChanges: [PriceChange] = []
+    var totalChange: Double = 0
+    var showPriceChanges = false
     private var backgroundedAt: Date?
 
     let repo = Repository()
@@ -78,12 +78,11 @@ final class AppStore {
             if phase == .ready, faceIDEnabled, let t = backgroundedAt, Date().timeIntervalSince(t) > 60 {
                 isLocked = true
             }
+            let wasAwayAt = backgroundedAt
             backgroundedAt = nil
-            if phase == .ready {
-                Task {
-                    if let last = lastLoaded, Date().timeIntervalSince(last) > 300 { await reload() }
-                    await refreshPricesIfNeeded()
-                }
+            // Coming back after > 60 s counts as opening the app again: fetch fresh prices.
+            if phase == .ready, let t = wasAwayAt, Date().timeIntervalSince(t) > 60 {
+                Task { await refreshPricesIfNeeded() }
             }
         default:
             break
@@ -122,16 +121,22 @@ final class AppStore {
         }
     }
 
-    /// Auto price update (replaces the web's daily cron): stocks (SSI), funds (Fmarket), gold (PNJ), crypto (Binance).
-    /// Runs when the app opens / comes back, at most every 15 minutes, then records today's net worth.
+    /// Auto price update each time the app is opened (replaces the web's daily cron):
+    /// stocks (SSI), funds (Fmarket), gold (PNJ), crypto (Binance). Then shows what moved since last time
+    /// and records today's net worth.
     func refreshPricesIfNeeded(force: Bool = false) async {
         guard phase == .ready, !isRefreshingPrices, !portfolio.assets.isEmpty else { return }
-        guard force || Date().timeIntervalSince(lastPriceRefresh) > 15 * 60 else { return }
         isRefreshingPrices = true
         defer { isRefreshingPrices = false }
-        lastPriceRefresh = Date()
-        lastPriceNotes = await repo.updateAllPrices(assets: portfolio.assets)
+        let before = portfolio
+        lastPriceNotes = await repo.updateAllPrices(assets: before.assets)
         await reload()
+        let changes = PriceChange.compute(before: before, after: portfolio)
+        if !changes.isEmpty {
+            priceChanges = changes
+            totalChange = portfolio.totalAssets() - before.totalAssets()
+            showPriceChanges = true
+        }
         try? await repo.upsertSnapshot(portfolio.snapshot())
     }
 

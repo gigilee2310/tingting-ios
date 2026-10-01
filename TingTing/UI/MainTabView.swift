@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MainTabView: View {
+    @Environment(AppStore.self) private var store
     @State private var tab = Tabs.home
     @State private var showAdd = false
     @State private var addRoute: AddRoute?
@@ -34,6 +35,10 @@ struct MainTabView: View {
                 addRoute = route
             }
             .presentationDetents([.medium])
+        }
+        .sheet(isPresented: Binding(get: { store.showPriceChanges && !store.isLocked },
+                                    set: { store.showPriceChanges = $0 })) {
+            PriceChangesView().presentationDetents([.medium, .large])
         }
         .sheet(item: $addRoute) { route in
             NavigationStack {

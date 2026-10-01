@@ -97,7 +97,7 @@ struct PriceUpdateSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("App tự cập nhật giá mỗi khi mở (tối đa 15 phút/lần). Bấm để lấy ngay: chứng khoán từ SSI, quỹ từ Fmarket, vàng từ PNJ (giá mua vào), coin từ Binance.")
+            Text("App tự cập nhật giá mỗi lần mở và báo biến động. Bấm để lấy ngay: chứng khoán từ SSI, quỹ từ Fmarket, vàng từ PNJ (giá mua vào), coin từ Binance.")
                 .font(.footnote).foregroundStyle(Theme.muted)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
                 ForEach(Repository.PriceClass.allCases, id: \.self) { button($0, $0.label) }

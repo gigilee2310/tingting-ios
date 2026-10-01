@@ -105,6 +105,23 @@ final class CalcTests: XCTestCase {
         XCTAssertEqual(p.totalCost(), 209_000_000)
     }
 
+    func testPriceChangesSinceLastOpen() {
+        let assets = [Asset(id: "a", type: .STOCK, symbol: "VCB", name: "VCB"),
+                      Asset(id: "b", type: .FUND, symbol: "DCDS", name: "DCDS")]
+        let txs = [Transaction(assetId: "a", type: .BUY, quantity: 100, price: 50_000),
+                   Transaction(assetId: "b", type: .BUY, quantity: 10, price: 90_000)]
+        let oldPrices = [MarketPrice(symbol: "VCB", price: 58_000, date: "2026-09-30"),
+                         MarketPrice(symbol: "DCDS", price: 93_000, date: "2026-09-30")]
+        let newPrices = [MarketPrice(symbol: "VCB", price: 57_600, date: "2026-10-01")] + oldPrices
+        let before = Portfolio(data: PortfolioData(assets: assets, transactions: txs, marketPrices: oldPrices))
+        let after = Portfolio(data: PortfolioData(assets: assets, transactions: txs, marketPrices: newPrices))
+        let changes = PriceChange.compute(before: before, after: after)
+        XCTAssertEqual(changes.count, 1)  // DCDS unchanged → not listed
+        XCTAssertEqual(changes.first?.symbol, "VCB")
+        XCTAssertEqual(changes.first?.valueDelta, -40_000)
+        XCTAssertEqual(changes.first?.percent ?? 0, -400.0 / 58_000, accuracy: 1e-9)
+    }
+
     func testPriceUnit() {
         XCTAssertEqual(Calc.priceUnit(.STOCK), 1000)
         XCTAssertEqual(Calc.priceUnit(.FUND), 1)
