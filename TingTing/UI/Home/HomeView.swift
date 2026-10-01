@@ -12,6 +12,12 @@ struct HomeView: View {
                     Disclaimer("⏳ \(warning)")
                 }
                 if let err = store.loadError { ErrorBox(text: err) }
+                if store.isRefreshingPrices {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Đang cập nhật giá chứng khoán, quỹ, vàng, coin…").font(.caption).foregroundStyle(Theme.muted)
+                    }
+                }
 
                 if p.assets.isEmpty && !store.isLoading {
                     emptyState
@@ -22,7 +28,7 @@ struct HomeView: View {
             .padding(16)
         }
         .screen()
-        .refreshable { await store.reload() }
+        .refreshable { await store.refreshAll() }
         .navigationTitle("Ting Ting")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

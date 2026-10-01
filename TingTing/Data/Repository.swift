@@ -172,28 +172,77 @@ struct Repository: Sendable {
         try await mapRLS { try await db.upsert("market_prices", rows, onConflict: "symbol,date") }
     }
 
-    enum PriceClass: String { case CRYPTO, GOLD, USDT }
+    enum PriceClass: String, CaseIterable {
+        case STOCK, FUND, GOLD, CRYPTO, USDT
 
-    /// "Cập nhật giá" buttons: Binance × USD rate for crypto, world spot for gold, and the USDT rate.
+        var label: String {
+            switch self {
+            case .STOCK: "Chứng khoán"
+            case .FUND: "Quỹ"
+            case .GOLD: "Vàng"
+            case .CRYPTO: "Crypto"
+            case .USDT: "USDT"
+            }
+        }
+
+        var assetType: AssetType? {
+            switch self {
+            case .STOCK: .STOCK
+            case .FUND: .FUND
+            case .GOLD: .GOLD
+            case .CRYPTO: .CRYPTO
+            case .USDT: nil
+            }
+        }
+    }
+
+    /// Fetches today's prices for one class and saves them to market_prices.
+    /// Stocks: SSI by symbol · Funds: Fmarket NAV · Gold: PNJ domestic BUY price (world spot as fallback)
+    /// · Crypto: Binance × USD rate · USDT: the rate itself.
     func updatePrices(_ cls: PriceClass, assets: [Asset]) async throws -> (message: String, updated: [(String, Double)]) {
-        if cls == .USDT {
-            let rate = await prices.usdToVnd()
-            let r = (rate + 0.5).rounded(.down)
+        guard let type = cls.assetType else {
+            let r = (await prices.usdToVnd() + 0.5).rounded(.down)
             try? await saveReadPrices([("USDT", r)])
             return ("Tỷ giá hôm nay: 1 USDT ≈ \(Fmt.amount(r, dp: 0)) ₫.", [("1 USDT", r)])
         }
-        let type: AssetType = cls == .GOLD ? .GOLD : .CRYPTO
-        let symbols = Array(Set(assets.filter { $0.type == type }.compactMap(\.symbol))).sorted()
-        guard !symbols.isEmpty else {
-            return ("Chưa có mã \(cls == .GOLD ? "vàng" : "crypto") nào để cập nhật.", [])
-        }
+        let symbols = Array(Set(assets.filter { $0.type == type }.compactMap { $0.symbol?.uppercased() })).sorted()
+        guard !symbols.isEmpty else { return ("Chưa có mã \(cls.label.lowercased()) nào để cập nhật.", []) }
+
         var updated: [(String, Double)] = []
         var errs: [String] = []
-        if cls == .GOLD {
-            let perChi = await prices.goldVndPerChi()
-            guard perChi > 0 else { throw AppError.validation("Không lấy được giá vàng (nguồn tạm lỗi). Sửa giá tay trong mã.") }
-            updated = symbols.map { ($0, perChi) }
-        } else {
+        switch cls {
+        case .STOCK:
+            let svc = prices
+            let results = await withTaskGroup(of: (String, Double?).self) { group -> [(String, Double?)] in
+                for s in symbols { group.addTask { (s, await svc.vnStock(s)) } }
+                var out: [(String, Double?)] = []
+                for await r in group { out.append(r) }
+                return out
+            }
+            for (s, p) in results {
+                if let p { updated.append((s, p)) } else { errs.append("\(s) (không thấy trên SSI)") }
+            }
+        case .FUND:
+            let navs = await prices.fundNAVs()
+            if navs.isEmpty {
+                throw AppError.validation("Không lấy được NAV quỹ từ Fmarket (nguồn tạm lỗi). Sửa giá tay trong mã.")
+            }
+            for s in symbols {
+                if let nav = navs[s] { updated.append((s, (nav + 0.5).rounded(.down))) } else { errs.append("\(s) (không có trên Fmarket)") }
+            }
+        case .GOLD:
+            let domestic = await prices.domesticGold()
+            let sjc = domestic["SJC"]?.buy
+            var world: Double?
+            for s in symbols {
+                if let p = domestic[s]?.buy ?? sjc {
+                    updated.append((s, p))
+                } else {
+                    if world == nil { world = await prices.goldVndPerChi() }
+                    if let w = world, w > 0 { updated.append((s, w)) } else { errs.append("\(s) (không lấy được giá)") }
+                }
+            }
+        default:
             let rate = await prices.usdToVnd()
             for s in symbols {
                 if let usdt = await prices.binanceUSDT(s) {
@@ -203,10 +252,20 @@ struct Repository: Sendable {
                 }
             }
         }
+        updated.sort { $0.0 < $1.0 }
         if !updated.isEmpty { try await saveReadPrices(updated.map { ($0.0, $0.1) }) }
         if updated.isEmpty { throw AppError.validation("Không cập nhật được: \(errs.joined(separator: ", "))") }
         let tail = errs.isEmpty ? "" : " · chưa được: \(errs.joined(separator: ", "))"
-        return ("Đã cập nhật \(updated.count) mã\(tail).", updated)
+        return ("Đã cập nhật \(updated.count) mã \(cls.label.lowercased())\(tail).", updated)
+    }
+
+    /// Refreshes every market-priced class (stocks, funds, gold, crypto). Errors are collected, not thrown.
+    func updateAllPrices(assets: [Asset]) async -> [String] {
+        var notes: [String] = []
+        for cls in [PriceClass.STOCK, .FUND, .GOLD, .CRYPTO] where assets.contains(where: { $0.type == cls.assetType }) {
+            do { notes.append(try await updatePrices(cls, assets: assets).message) } catch { notes.append(error.vietnamese) }
+        }
+        return notes
     }
 
     // MARK: - Snapshots

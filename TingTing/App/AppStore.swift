@@ -24,10 +24,12 @@ final class AppStore {
         get { UserDefaults.standard.object(forKey: "faceIDEnabled") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "faceIDEnabled") }
     }
-    private var lastDailyRefresh: String {
-        get { UserDefaults.standard.string(forKey: "lastDailyRefresh") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "lastDailyRefresh") }
+    private var lastPriceRefresh: Date {
+        get { UserDefaults.standard.object(forKey: "lastPriceRefresh") as? Date ?? .distantPast }
+        set { UserDefaults.standard.set(newValue, forKey: "lastPriceRefresh") }
     }
+    var isRefreshingPrices = false
+    var lastPriceNotes: [String] = []
     private var backgroundedAt: Date?
 
     let repo = Repository()
@@ -44,7 +46,7 @@ final class AppStore {
             phase = .ready
             if faceIDEnabled { isLocked = true }
             await reload()
-            await dailyRefreshIfNeeded()
+            await refreshPricesIfNeeded()
         } else {
             phase = .signedOut
         }
@@ -56,7 +58,7 @@ final class AppStore {
         phase = .ready
         isLocked = false
         await reload()
-        await dailyRefreshIfNeeded()
+        await refreshPricesIfNeeded()
     }
 
     func signOut() async {
@@ -77,8 +79,11 @@ final class AppStore {
                 isLocked = true
             }
             backgroundedAt = nil
-            if phase == .ready, let last = lastLoaded, Date().timeIntervalSince(last) > 300 {
-                Task { await reload() }
+            if phase == .ready {
+                Task {
+                    if let last = lastLoaded, Date().timeIntervalSince(last) > 300 { await reload() }
+                    await refreshPricesIfNeeded()
+                }
             }
         default:
             break
@@ -117,16 +122,23 @@ final class AppStore {
         }
     }
 
-    /// Once a day: refresh crypto + gold prices (replaces the web's daily cron) and record today's net worth.
-    func dailyRefreshIfNeeded() async {
-        let today = DateUtil.today
-        guard phase == .ready, lastDailyRefresh != today, !portfolio.assets.isEmpty else { return }
-        lastDailyRefresh = today
-        let assets = portfolio.assets
-        _ = try? await repo.updatePrices(.CRYPTO, assets: assets)
-        _ = try? await repo.updatePrices(.GOLD, assets: assets)
+    /// Auto price update (replaces the web's daily cron): stocks (SSI), funds (Fmarket), gold (PNJ), crypto (Binance).
+    /// Runs when the app opens / comes back, at most every 15 minutes, then records today's net worth.
+    func refreshPricesIfNeeded(force: Bool = false) async {
+        guard phase == .ready, !isRefreshingPrices, !portfolio.assets.isEmpty else { return }
+        guard force || Date().timeIntervalSince(lastPriceRefresh) > 15 * 60 else { return }
+        isRefreshingPrices = true
+        defer { isRefreshingPrices = false }
+        lastPriceRefresh = Date()
+        lastPriceNotes = await repo.updateAllPrices(assets: portfolio.assets)
         await reload()
         try? await repo.upsertSnapshot(portfolio.snapshot())
+    }
+
+    /// Pull-to-refresh: fresh prices + data.
+    func refreshAll() async {
+        await reload()
+        await refreshPricesIfNeeded(force: true)
     }
 
     /// Runs a write, then reloads. Returns an error message or nil.

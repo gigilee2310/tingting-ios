@@ -97,12 +97,10 @@ struct PriceUpdateSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Bấm để lấy giá mới nhất hôm nay. App cũng tự cập nhật giá crypto & vàng mỗi ngày một lần.")
+            Text("App tự cập nhật giá mỗi khi mở (tối đa 15 phút/lần). Bấm để lấy ngay: chứng khoán từ SSI, quỹ từ Fmarket, vàng từ PNJ (giá mua vào), coin từ Binance.")
                 .font(.footnote).foregroundStyle(Theme.muted)
-            HStack(spacing: 8) {
-                button(.CRYPTO, "Crypto")
-                button(.GOLD, "Vàng")
-                button(.USDT, "USDT")
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
+                ForEach(Repository.PriceClass.allCases, id: \.self) { button($0, $0.label) }
             }
             if let message { Text(message).font(.footnote).foregroundStyle(Theme.muted) }
             if !updated.isEmpty {
@@ -118,10 +116,11 @@ struct PriceUpdateSection: View {
                 .padding(10)
                 .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 10))
             }
-            Text("Chứng khoán/Quỹ VN chưa có nguồn giá miễn phí ổn định — sửa giá trong từng mã, hoặc nhờ AI tra giá bên dưới.")
+            Text("Các nguồn giá Việt Nam là không chính thức; nếu một mã không có giá, sửa tay trong mã đó hoặc nhờ AI tra giá bên dưới.")
                 .font(.caption).foregroundStyle(Theme.muted)
         }
         .padding(.vertical, 4)
+        .buttonStyle(.borderless)
     }
 
     private func button(_ cls: Repository.PriceClass, _ label: String) -> some View {

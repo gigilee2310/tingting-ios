@@ -38,7 +38,7 @@ struct AssetsHubView: View {
             .padding(16)
         }
         .screen()
-        .refreshable { await store.reload() }
+        .refreshable { await store.refreshAll() }
         .navigationTitle("Tài sản")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -92,7 +92,7 @@ struct HoldingListView: View {
                 Text(Fmt.vnd(holdings.reduce(0) { $0 + $1.value })).font(.money(14))
             }
             Section {
-                Text("Định giá tham khảo, không phải khuyến nghị đầu tư. Giá crypto/vàng tự cập nhật mỗi ngày; chứng khoán/quỹ sửa tay hoặc nhờ AI tra giá trong Cài đặt.")
+                Text("Định giá tham khảo, không phải khuyến nghị đầu tư. Giá tự cập nhật khi mở app (chứng khoán: SSI · quỹ: Fmarket · vàng: PNJ giá mua vào · coin: Binance). Kéo xuống để lấy giá mới; sửa tay nếu mã không có giá.")
                     .font(.footnote).foregroundStyle(Theme.muted)
             }
         }
@@ -109,7 +109,7 @@ struct HoldingListView: View {
                 } label: { Label("Sắp xếp", systemImage: "arrow.up.arrow.down") }
             }
         }
-        .refreshable { await store.reload() }
+        .refreshable { await store.refreshAll() }
         .confirmationDialog("Xoá \(pendingDelete?.asset.symbol ?? "") và toàn bộ giao dịch của nó?",
                             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
                             titleVisibility: .visible) {

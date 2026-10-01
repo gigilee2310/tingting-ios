@@ -181,7 +181,9 @@ struct GoldFormView: View {
         }
         .background(Theme.background)
         .task {
-            refPrice = await PriceService.shared.goldVndPerChi()
+            let domestic = await PriceService.shared.domesticGold()
+            refPrice = domestic["SJC"]?.buy ?? 0
+            if refPrice == 0 { refPrice = await PriceService.shared.goldVndPerChi() }
             if price.isEmpty && refPrice > 0 { price = String(Int(refPrice)) }
         }
     }
@@ -199,7 +201,7 @@ struct GoldFormView: View {
                 }
                 Field(label: "Giá vàng / chỉ (₫)") { NumberField("giá mỗi chỉ", text: $price) }
                 Text(refPrice > 0
-                     ? "Giá tham khảo tự lấy: \(Fmt.vnd(refPrice))/chỉ (vàng thế giới quy đổi, sửa lại theo SJC nếu cần)."
+                     ? "Giá tham khảo tự lấy: \(Fmt.vnd(refPrice))/chỉ (SJC giá mua vào, nguồn PNJ). Sửa lại nếu giá bạn mua khác."
                      : "Nhập giá mỗi chỉ bạn đang thấy (SJC/PNJ).")
                     .font(.caption).foregroundStyle(Theme.muted)
                 HStack {

@@ -36,10 +36,65 @@ actor PriceService {
         return p
     }
 
-    private func json(_ urlString: String) async -> [String: Any]? {
+    // MARK: - Vietnam market (unofficial public endpoints — may change; callers keep old prices on failure)
+
+    /// Last matched price of a VN stock in full VND, from SSI iBoard (falls back to the reference price
+    /// before the session opens).
+    func vnStock(_ symbol: String) async -> Double? {
+        let s = symbol.uppercased().addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? symbol
+        guard let j = await json("https://iboard-query.ssi.com.vn/stock/\(s)"),
+              let d = j["data"] as? [String: Any] else { return nil }
+        for key in ["matchedPrice", "lastMatchedPrice", "refPrice", "priorClosePrice"] {
+            if let p = (d[key] as? NSNumber)?.doubleValue, p > 0 { return p }
+        }
+        return nil
+    }
+
+    /// NAV per unit of all open-ended funds on Fmarket, keyed by upper-cased short name / code.
+    func fundNAVs() async -> [String: Double] {
+        let body: [String: Any] = [
+            "types": ["NEW_FUND", "TRADING_FUND"], "issuerIds": [String](), "sortOrder": "DESC", "sortField": "navTo6Months",
+            "page": 1, "pageSize": 200, "isIpo": false, "fundAssetTypes": [String](), "bondRemainPeriods": [String](),
+            "searchField": "", "isBuyByReward": false, "thirdAppIds": [String](),
+        ]
+        guard let j = await json("https://api.fmarket.vn/res/products/filter", body: body),
+              let data = j["data"] as? [String: Any],
+              let rows = data["rows"] as? [[String: Any]] else { return [:] }
+        var out: [String: Double] = [:]
+        for r in rows {
+            guard let nav = (r["nav"] as? NSNumber)?.doubleValue, nav > 0 else { continue }
+            for key in ["shortName", "code"] {
+                if let k = (r[key] as? String)?.uppercased(), !k.isEmpty { out[k] = nav }
+            }
+        }
+        return out
+    }
+
+    /// Domestic gold prices from PNJ in VND per chỉ: product code (SJC, N24K, PNJ…) → (buy, sell).
+    /// PNJ quotes thousands of đồng per chỉ.
+    func domesticGold() async -> [String: (buy: Double, sell: Double)] {
+        guard let j = await json("https://edge-api.pnj.io/ecom-frontend/v1/get-gold-price?zone=00"),
+              let rows = j["data"] as? [[String: Any]] else { return [:] }
+        var out: [String: (buy: Double, sell: Double)] = [:]
+        for r in rows {
+            guard let code = (r["masp"] as? String)?.uppercased(),
+                  let buy = (r["giamua"] as? NSNumber)?.doubleValue, buy > 0 else { continue }
+            let sell = (r["giaban"] as? NSNumber)?.doubleValue ?? buy
+            out[code] = (buy * 1000, sell * 1000)
+        }
+        return out
+    }
+
+    private func json(_ urlString: String, body: [String: Any]? = nil) async -> [String: Any]? {
         guard let url = URL(string: urlString) else { return nil }
         var req = URLRequest(url: url, timeoutInterval: 15)
         req.cachePolicy = .reloadIgnoringLocalCacheData
+        req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
+        if let body {
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        }
         guard let result = try? await URLSession.shared.data(for: req),
               (result.1 as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         return try? JSONSerialization.jsonObject(with: result.0) as? [String: Any]
