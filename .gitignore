@@ -1,0 +1,11 @@
+*.xcodeproj/
+TingTing/Info.plist
+TingTing/Support/Secrets.swift
+build/
+DerivedData/
+Payload/
+*.ipa
+*.xcresult
+.DS_Store
+xcuserdata/
+.claude/

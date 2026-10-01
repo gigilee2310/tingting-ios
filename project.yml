@@ -1,0 +1,66 @@
+name: TingTing
+options:
+  bundleIdPrefix: com.gigilee
+  deploymentTarget:
+    iOS: "26.0"
+  developmentLanguage: vi
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+targets:
+  TingTing:
+    type: application
+    platform: iOS
+    sources:
+      - path: TingTing
+    info:
+      path: TingTing/Info.plist
+      properties:
+        CFBundleDisplayName: Ting Ting
+        CFBundleDevelopmentRegion: vi
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIApplicationSupportsIndirectInputEvents: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSFaceIDUsageDescription: "Ting Ting dùng Face ID để khoá ứng dụng, bảo vệ thông tin tài sản của bạn."
+        NSCameraUsageDescription: "Ting Ting cần camera để chụp ảnh lệnh giao dịch hoặc bảng giá cho AI đọc."
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_MODULE_NAME: TingTing
+        PRODUCT_BUNDLE_IDENTIFIER: com.gigilee.tingting
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  TingTingTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: TingTingTests
+    dependencies:
+      - target: TingTing
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.gigilee.tingting.tests
+schemes:
+  TingTing:
+    build:
+      targets:
+        TingTing: all
+        TingTingTests: [test]
+    test:
+      config: Debug
+      targets:
+        - TingTingTests
+    run:
+      config: Debug
+    archive:
+      config: Release
